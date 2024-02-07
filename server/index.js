@@ -17,11 +17,11 @@ const io = new Server(server, {
 });
 
 const db = createClient({
-    url: "libsql://equipped-forerunner-gaston118.turso.io",
+    url: "libsql://enabling-banshee-gaston118.turso.io",
     authToken: process.env.LIBSQL_AUTH_TOKEN
 });
 
-await db.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, content TEXT)");
+await db.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, content TEXT, user TEXT)");
 
 
 
@@ -36,17 +36,20 @@ io.on('connection', async (socket) => {
         console.log('message: ' + msg);
 
         let result
+        const username = socket.handshake.auth.username ?? "anonymous"
+        console.log({username});
+
         try{
-            result = await db.execute({
-                sql: "INSERT INTO messages (content) VALUES (:msg)",
-                args: { msg }
+             result = await db.execute({
+                sql: "INSERT INTO messages (content, user) VALUES (:msg, :username)",
+                args: { msg, username }
             })
         }catch(e){
             console.log(e)
             return
         }
 
-        io.emit('chat message', msg, result.lastInsertRowid.toString());
+        io.emit('chat message', msg, result.lastInsertRowid.toString(), username);
 
     });
 
@@ -55,12 +58,12 @@ io.on('connection', async (socket) => {
     if(!socket.recovered){
         try{
             const result = await db.execute({
-                sql: "SELECT * FROM messages WHERE id > ?",
+                sql: "SELECT id, content, user FROM messages WHERE id > ?",
                 args: [socket.handshake.auth.serverOffset || 0]
             })
 
             result.rows.forEach(row => {
-                socket.emit('chat message', row.content, row.id.toString())
+                socket.emit('chat message', row.content, row.id.toString(), row.user)
             })
             
         }catch(e){
